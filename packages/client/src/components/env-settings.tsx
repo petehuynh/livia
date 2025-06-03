@@ -83,10 +83,24 @@ export default function EnvSettings() {
     setEditingIndex(null);
   };
 
-  // Dummy function for onApiKeySaved
+  const handleSave = async () => {
+    setIsUpdating(true);
+    try {
+      await apiClient.updateLocalEnvs(localEnvs);
+      // Refetch to ensure we have the latest data
+      await fetchLocalEnvs();
+    } catch (error) {
+      console.error('Failed to save environment variables:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Function for onApiKeySaved - refetch envs when API key is saved
   const handleApiKeySaved = () => {
     console.log('API Key was saved');
-    // Potentially refetch envs or perform other actions here
+    // Refetch envs when API key is saved
+    fetchLocalEnvs();
   };
 
   return (
@@ -227,7 +241,7 @@ export default function EnvSettings() {
         <Button variant="outline" onClick={handleReset}>
           Reset
         </Button>
-        <Button variant="outline" disabled={isUpdating}>
+        <Button variant="outline" disabled={isUpdating} onClick={handleSave}>
           Save Changes
         </Button>
       </div>

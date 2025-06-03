@@ -23,8 +23,8 @@ export function expandTildePath(
 }
 
 /**
- * Resolves the path to the `.env` file, searching only within the start directory or
- * optionally up to a boundary directory (e.g., a monorepo root).
+ * Resolves the path to the `.env` file, prioritizing the project root first,
+ * then searching upward from the start directory.
  *
  * @param startDir - Directory to begin the lookup (default: current working directory).
  * @param boundaryDir - Optional directory at which to stop searching upward.
@@ -32,26 +32,69 @@ export function expandTildePath(
  */
 export function resolveEnvFile(startDir: string = process.cwd(), boundaryDir?: string): string {
   const root = path.resolve(startDir);
-  const stopAt = boundaryDir ? path.resolve(boundaryDir) : undefined;
-  // If no boundary provided, only consider .env in the start directory
-  if (!stopAt) {
-    return path.join(root, '.env');
-  }
+  
+  // First, try to find the project root by looking for common indicators
+  // Look for package.json, .git, or other project root indicators
+  let projectRoot = root;
   let current = root;
+  let topMostGitModules = null;
+  
+  // Search upward to find the project root
+  while (true) {
+    const hasPackageJson = existsSync(path.join(current, 'package.json'));
+    const hasGitDir = existsSync(path.join(current, '.git'));
+    const hasGitModules = existsSync(path.join(current, '.gitmodules'));
+    
+    // If we find project indicators, this might be the project root
+    if (hasPackageJson || hasGitDir || hasGitModules) {
+      projectRoot = current;
+      
+      // Keep track of the topmost .gitmodules file
+      if (hasGitModules) {
+        topMostGitModules = current;
+      }
+    }
+    
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break; // Reached filesystem root
+    }
+    current = parent;
+  }
+  
+  // Use the topmost .gitmodules location as the project root if found
+  if (topMostGitModules) {
+    projectRoot = topMostGitModules;
+  }
+  
+  // First priority: Check for .env in the detected project root
+  const projectRootEnv = path.join(projectRoot, '.env');
+  if (existsSync(projectRootEnv)) {
+    return projectRootEnv;
+  }
+  
+  // Second priority: Search upward from the start directory
+  current = root;
   while (true) {
     const candidate = path.join(current, '.env');
     if (existsSync(candidate)) {
       return candidate;
     }
-    if (stopAt && current === stopAt) {
+    
+    // Stop if we've reached the boundary directory
+    if (boundaryDir && current === path.resolve(boundaryDir)) {
       break;
     }
+    
     const parent = path.dirname(current);
+    // Stop if we've reached the filesystem root
     if (parent === current) {
       break;
     }
     current = parent;
   }
+  
+  // If no .env file found, return the default path in the start directory
   return path.join(root, '.env');
 }
 
